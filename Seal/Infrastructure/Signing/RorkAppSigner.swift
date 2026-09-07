@@ -58,13 +58,15 @@ enum RorkAppSigner {
     ///   - privateKeyData: PEM 或 DER 格式私钥（由 AltSign ALTCertificate 从 P12 解析）
     ///   - mainBundleID: 主应用改写后的 Bundle ID（prepared.mappedMainBundleID）
     ///   - profiles: 全部描述文件（主应用 + 扩展），bundleID 均为改写后的 ID
+    ///   - mode: CodeDirectory 哈希模式（影响 CMS 签名中哪种 cdhash 进入签名）
     static func signAppBundle(
         at appURL: URL,
         certificateData: Data,
         privateKeyData: Data,
         mainBundleID: String,
         profiles: [ProfileMaterial],
-        appGroupIdentifiers: [String] = []
+        appGroupIdentifiers: [String] = [],
+        mode: CodeDirectoryHashingMode = .compatible
     ) throws {
         guard certificateData.isEmpty == false else {
             throw SignError.missingCertificate
@@ -107,9 +109,10 @@ enum RorkAppSigner {
             provisioningProfilesByBundleIdentifier: extensionProfiles,
             appGroupIdentifiers: appGroupIdentifiers,
             embedProvisioningProfiles: true,
-            // 对齐 ldid / zsign 默认：SHA-1 主 CodeDirectory + SHA-256 备用 CodeDirectory，
-            // 兼容 iOS 16.0-27 全版本（单 SHA-256 CD 在部分老系统上校验更易失败）。
-            codeDirectoryHashingMode: .compatible
+            // mode 参数控制 CodeDirectoryHashingMode：
+            //   - .compatible：SHA-1 主 CD + SHA-256 备用（老系统兼容）
+            //   - .sha256Only：单 SHA-256 主 CD（iOS 18+ 某些场景更稳定）
+            codeDirectoryHashingMode: mode
         )
 
         do {
@@ -120,6 +123,57 @@ enum RorkAppSigner {
             )
         } catch {
             throw SignError.signFailed(error.localizedDescription)
+        }
+    }
+
+    /// 双引擎签名回退：先尝试主模式（compatible），失败后再尝试备用模式（sha256Only）。
+    ///
+    /// sha256Only 模式仅生成 SHA-256 主 CodeDirectory，iOS 18+ 某些场景下比 dual-CD
+    /// 更稳定（尤其是 symtab 规则、SDKVersion 限制较严格的系统）。
+    static func signAppBundleWithFallback(
+        at appURL: URL,
+        certificateData: Data,
+        privateKeyData: Data,
+        mainBundleID: String,
+        profiles: [ProfileMaterial],
+        appGroupIdentifiers: [String] = []
+    ) throws {
+        do {
+            try signAppBundle(
+                at: appURL,
+                certificateData: certificateData,
+                privateKeyData: privateKeyData,
+                mainBundleID: mainBundleID,
+                profiles: profiles,
+                appGroupIdentifiers: appGroupIdentifiers,
+                mode: .compatible
+            )
+            NSLog("[Seal] 签名成功（主引擎 .compatible）")
+        } catch {
+            let primaryError = error
+            NSLog("[Seal] 主引擎签名失败（\(primaryError.localizedDescription)），回退到 .sha256Only")
+
+            // 清理可能已写入的 _CodeSignature / Info.plist，避免 rork-sign 二次签名时冲突
+            let fm = FileManager.default
+            let codesig = appURL.appendingPathComponent("_CodeSignature")
+            try? fm.removeItem(at: codesig)
+
+            do {
+                try signAppBundle(
+                    at: appURL,
+                    certificateData: certificateData,
+                    privateKeyData: privateKeyData,
+                    mainBundleID: mainBundleID,
+                    profiles: profiles,
+                    appGroupIdentifiers: appGroupIdentifiers,
+                    mode: .sha256Only
+                )
+                NSLog("[Seal] 签名成功（备用引擎 .sha256Only）")
+            } catch let fallbackError {
+                throw SignError.signFailed(
+                    "主引擎：\(primaryError.localizedDescription)；备用引擎：\(fallbackError.localizedDescription)"
+                )
+            }
         }
     }
 }

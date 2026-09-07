@@ -584,6 +584,7 @@ actor SigningCoordinator {
         // OTA 安装（首选）：本地 HTTPS + itms-services，iOS 系统安装器接管。
         // 不依赖配对通道/隧道/installd 暂存链路。Seal 自身更新仍走隧道通道。
         if OtaInstallService.shared.isEnabled && !app.isSeal {
+            var otaError: Error?
             do {
                 try await updateState(appID: app.id, stage: .pushing)
                 await progress(.pushing)
@@ -602,20 +603,28 @@ actor SigningCoordinator {
                 updated.lastInstalledAt = Date()
                 try await appStore.save(updated)
                 return updated
-            } catch let otaError as NSError where otaError.isOtaCASetupNeeded {
+            } catch let caughtOtaError as NSError where caughtOtaError.isOtaCASetupNeeded {
                 // 一次性 CA 信任引导：直接呈现给用户，不回退隧道
                 updated.signedArtifactStatus = .installFailed
                 updated.lastInstallFailureCode = "SEAL-INSTALL-730"
-                updated.lastInstallFailureReason = otaError.localizedDescription
+                updated.lastInstallFailureReason = caughtOtaError.localizedDescription
                 try await persistAppState(updated)
                 throw ImportFailure(
                     title: "需要信任本地证书（一次性）",
-                    reason: otaError.localizedDescription,
+                    reason: caughtOtaError.localizedDescription,
                     recovery: "文件 App 安装描述文件 → 证书信任设置开启完全信任 → 回到 Seal 再点安装",
                     code: "SEAL-INSTALL-730"
                 )
             } catch {
-                // 其他 OTA 错误：回退隧道通道继续尝试（最终失败由上层记录）
+                otaError = error
+                // 不静默回退：记录 OTA 失败原因，告知用户后回退隧道
+                NSLog("[Seal] OTA 安装失败，错误：\(error.localizedDescription)，回退到隧道通道")
+            }
+            // OTA 失败但有明确错误时，保存记录（回退隧道继续尝试 installations）
+            if let otaError {
+                updated.lastInstallFailureCode = "SEAL-INSTALL-731"
+                updated.lastInstallFailureReason = "OTA 不可用：\(otaError.localizedDescription)；正在尝试备选安装…"
+                // 不写库（隧道可能成功），仅作为回退时的引导
             }
         }
 

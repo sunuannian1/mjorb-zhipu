@@ -1548,7 +1548,8 @@ actor ApplePortalSigningService {
                 appGroups = []
             }
 
-            try RorkAppSigner.signAppBundle(
+            // 双引擎签名：主 .compatible 失败自动回退到 .sha256Only
+            try RorkAppSigner.signAppBundleWithFallback(
                 at: appURL,
                 certificateData: certificateData,
                 privateKeyData: privateKeyData,

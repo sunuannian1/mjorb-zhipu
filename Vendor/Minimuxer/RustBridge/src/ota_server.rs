@@ -65,6 +65,8 @@ struct OtaAssets {
     ipa_path: String,
     cert_der: CertificateDer<'static>,
     key_der_bytes: Vec<u8>,
+    /// fullchain 证书链（leaf + CA），可选。有则优先使用，无则退化为仅 leaf
+    fullchain_der: Option<Vec<CertificateDer<'static>>>,
 }
 
 static OTA_ASSETS: std::sync::OnceLock<
@@ -76,6 +78,7 @@ fn assets_slot() -> &'static std::sync::Mutex<Option<OtaAssets>> {
 }
 
 /// 配置服务资源（PEM 证书/密钥、清单、IPA 路径、CA 描述文件路径）
+/// cert_pem 支持单证书或 fullchain（leaf + CA 拼接），内部自动识别
 pub fn configure(
     ca_pem: &str,
     cert_pem: &str,
@@ -94,7 +97,11 @@ pub fn configure(
             .decode(body.trim())
             .map_err(|e| format!("PEM 解码失败: {e}"))
     };
-    let cert_der = CertificateDer::from(pem_body(cert_pem)?);
+    // 解析 fullchain：cert_pem 可能包含多个证书（leaf + CA）
+    let chain = load_cert_chain(cert_pem)?;
+    let cert_der = chain.first().cloned().ok_or("证书链为空".to_string())?;
+    // 如果链中只有 1 张证书，fullchain = None（退化为旧行为）
+    let fullchain_der = if chain.len() > 1 { Some(chain) } else { None };
     let key_der_bytes = pem_body(key_pem).map_err(|e| format!("私钥解析失败: {e}"))?;
     let mut slot = assets_slot().lock().map_err(|e| e.to_string())?;
     *slot = Some(OtaAssets {
@@ -103,8 +110,37 @@ pub fn configure(
         ipa_path,
         cert_der,
         key_der_bytes,
+        fullchain_der,
     });
     Ok(())
+}
+
+/// 从 PEM 字符串解析所有证书 DER（支持 fullchain 多证书）
+fn load_cert_chain(pem: &str) -> Result<Vec<CertificateDer<'static>>, String> {
+    let mut certs = Vec::new();
+    for line_block in pem.split("-----BEGIN CERTIFICATE-----") {
+        let block = line_block.trim();
+        if block.is_empty() {
+            continue;
+        }
+        // 去掉尾部 -----END CERTIFICATE-----\n
+        let b64 = block
+            .split("-----END CERTIFICATE-----")
+            .next()
+            .unwrap_or(block)
+            .lines()
+            .filter(|l| !l.contains("-----"))
+            .collect::<String>();
+        use base64::Engine;
+        match base64::engine::general_purpose::STANDARD.decode(b64.trim()) {
+            Ok(der) => certs.push(CertificateDer::from(der)),
+            Err(_) => continue,
+        }
+    }
+    if certs.is_empty() {
+        return Err("证书链中未找到任何证书".into());
+    }
+    Ok(certs)
 }
 
 /// 启动 HTTPS 服务器（绑定 127.0.0.1 随机端口，后台常驻）。
@@ -119,10 +155,14 @@ pub async fn serve() -> Result<u16, String> {
                 ipa_path: a.ipa_path.clone(),
                 cert_der: a.cert_der.clone(),
                 key_der_bytes: a.key_der_bytes.clone(),
+                fullchain_der: a.fullchain_der.clone(),
             },
             None => return Err("OTA 服务尚未配置".into()),
         }
     };
+
+    // 构建证书链：优先从 Swift 侧传入的 fullchain（leaf + CA），回退到单个 leaf
+    let cert_chain = assets.fullchain_der.clone().unwrap_or_else(|| vec![assets.cert_der.clone()]);
 
     let tls_config = rustls::ServerConfig::builder_with_provider(
         rustls::crypto::ring::default_provider().into(),
@@ -131,10 +171,12 @@ pub async fn serve() -> Result<u16, String> {
     .map_err(|e| format!("TLS 协议版本配置失败: {e}"))?
     .with_no_client_auth()
     .with_single_cert(
-        vec![assets.cert_der],
-        PrivateKeyDer::try_from(assets.key_der_bytes.clone()).map_err(|e| format!("私钥加载失败: {e:?}"))?,
+        cert_chain,
+        PrivateKeyDer::try_from(assets.key_der_bytes.clone())
+            .map_err(|e| format!("私钥加载失败: {e:?}"))?,
     )
     .map_err(|e| format!("TLS 配置失败: {e}"))?;
+
     let acceptor = Arc::new(TlsAcceptor::from(Arc::new(tls_config)));
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
