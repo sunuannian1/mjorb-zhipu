@@ -101,6 +101,13 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: Seal/Resources/Seal.entitlements
+        OTHER_LDFLAGS:
+          - "$(inherited)"
+          - "-Xlinker"
+          - "-undefined"
+          - "-Xlinker"
+          - "dynamic_lookup"
+          - "-Wl,-no_fixup_chains"
   SealTunnel:
     type: app-extension
     platform: iOS
