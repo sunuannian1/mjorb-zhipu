@@ -17,17 +17,20 @@ final class OtaInstallService: @unchecked Sendable {
     private var identity: (ca: String, cert: String, key: String)?
     private var otaBackgroundTaskID: UIBackgroundTaskIdentifier = .invalid
 
+    private var otaDirectoryURL: URL {
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("OTA", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
     private var identityFileURL: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("SealOTA-identity.json")
+        otaDirectoryURL.appendingPathComponent("identity.json")
     }
     private var ipaFileURL: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("SealOTA-app.ipa")
+        otaDirectoryURL.appendingPathComponent("app.ipa")
     }
     private var manifestFileURL: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("SealOTA-manifest.plist")
+        otaDirectoryURL.appendingPathComponent("manifest.plist")
     }
     private var caProfileFileURL: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
