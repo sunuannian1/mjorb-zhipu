@@ -71,8 +71,14 @@ final class OtaBackupServer: @unchecked Sendable {
         let listener = try NWListener(using: params, on: .any)
         self.listener = listener
 
+        // Swift 6 禁止在 @Sendable closure 中捕获并 mutation 栈上 var。
+        // 用 reference-type box 包裹 startError，捕获的是 let 引用，编译器接受。
+        final class ListenerStartErrorBox {
+            var error: Error?
+        }
+        let errorBox = ListenerStartErrorBox()
+
         let semaphore = DispatchSemaphore(value: 0)
-        var startError: Error?
         listener.stateUpdateHandler = { state in
             switch state {
             case .ready:
@@ -81,7 +87,7 @@ final class OtaBackupServer: @unchecked Sendable {
                 }
                 semaphore.signal()
             case .failed(let err):
-                startError = err
+                errorBox.error = err
                 semaphore.signal()
             case .cancelled:
                 semaphore.signal()
@@ -97,7 +103,7 @@ final class OtaBackupServer: @unchecked Sendable {
         listener.start(queue: queue)
         semaphore.wait()
 
-        if let err = startError {
+        if let err = errorBox.error {
             throw OSError.listenerStartFailed(err.localizedDescription)
         }
 
