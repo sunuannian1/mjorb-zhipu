@@ -9,7 +9,7 @@ import ZIPFoundation
 ///
 /// 一次性引导：首次使用需在「文件 App → Seal」中安装 SealCA.mobileconfig
 /// 描述文件，并在 证书信任设置 中开启完全信任（约 30 秒）。
-final class OtaInstallService {
+final class OtaInstallService: @unchecked Sendable {
     static let shared = OtaInstallService()
 
     private var serverPort: UInt16?
