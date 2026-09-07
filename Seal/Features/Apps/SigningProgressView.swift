@@ -165,10 +165,18 @@ struct SigningProgressView: View {
                 .sealPrimaryAction(cornerRadius: 14)
 
         case .failed(let failure):
-            Button(primaryRecoveryTitle(failure)) {
-                performPrimaryRecovery(failure)
+            VStack(spacing: 10) {
+                if failure.code == "SEAL-INSTALL-730" {
+                    Button("安装描述文件（跳转设置）") {
+                        OtaInstallService.shared.openCAProfileInSettings()
+                    }
+                    .sealPrimaryAction(cornerRadius: 14)
+                }
+                Button(primaryRecoveryTitle(failure)) {
+                    performPrimaryRecovery(failure)
+                }
+                .sealPrimaryAction(cornerRadius: 14)
             }
-            .sealPrimaryAction(cornerRadius: 14)
         case nil:
             EmptyView()
         }

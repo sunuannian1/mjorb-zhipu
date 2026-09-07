@@ -39,6 +39,12 @@ final class OtaInstallService: @unchecked Sendable {
     /// 用户在文件 App 中可直接点开安装的 CA 描述文件
     var caProfileFileVisibleURL: URL { caProfileFileURL }
 
+    /// 在 Seal 内直接打开 CA 描述文件，系统会自动跳转到设置安装
+    func openCAProfileInSettings() {
+        guard FileManager.default.fileExists(atPath: caProfileFileURL.path) else { return }
+        UIApplication.shared.open(caProfileFileURL)
+    }
+
     /// OTA 安装开关（设置项可覆盖；默认开启）
     var isEnabled: Bool {
         UserDefaults.standard.object(forKey: "SealOTA.enabled") as? Bool ?? true
