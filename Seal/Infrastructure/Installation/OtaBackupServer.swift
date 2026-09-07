@@ -64,7 +64,8 @@ final class OtaBackupServer: @unchecked Sendable {
             sec_identity_create(identity)!
         )
 
-        let params = NWParameters(tls: tlsOptions, .tcp)
+        let tcpOptions = NWProtocolTCP.Options()
+        let params = NWParameters(tls: tlsOptions, tcp: tcpOptions)
         params.requiredInterfaceType = .loopback
 
         let listener = try NWListener(using: params, on: .any)
@@ -255,7 +256,7 @@ final class OtaBackupServer: @unchecked Sendable {
             var acc = buffer
             if let data { acc.append(data) }
             if let range = acc.range(of: Data("\r\n\r\n".utf8)) {
-                let header = acc.subdata(in: ..<range.lowerBound)
+                let header = acc.subdata(in: acc.startIndex..<range.lowerBound)
                 self.respond(header: header, conn: conn)
                 return
             }
