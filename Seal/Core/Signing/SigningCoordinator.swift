@@ -583,7 +583,8 @@ actor SigningCoordinator {
 
         // OTA 安装（首选）：本地 HTTPS + itms-services，iOS 系统安装器接管。
         // 不依赖配对通道/隧道/installd 暂存链路。Seal 自身更新仍走隧道通道。
-        if OtaInstallService.shared.isEnabled && !app.isSeal {
+        let otaEnabled = await OtaInstallService.shared.isEnabled
+        if otaEnabled && !app.isSeal {
             var otaError: Error?
             do {
                 try await updateState(appID: app.id, stage: .pushing)
