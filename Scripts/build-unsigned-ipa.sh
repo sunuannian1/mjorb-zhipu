@@ -17,7 +17,7 @@ fi
 
 rm -rf "$package_root" "$archive" "$archive.sha256"
 
-xcodebuild build \
+xcodebuild clean build \
   -project Seal.xcodeproj \
   -scheme Seal \
   -configuration "$configuration" \
