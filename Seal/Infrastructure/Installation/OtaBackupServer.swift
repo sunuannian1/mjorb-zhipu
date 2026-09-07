@@ -73,7 +73,7 @@ final class OtaBackupServer: @unchecked Sendable {
 
         // Swift 6 禁止在 @Sendable closure 中捕获并 mutation 栈上 var。
         // 用 reference-type box 包裹 startError，捕获的是 let 引用，编译器接受。
-        final class ListenerStartErrorBox {
+        final class ListenerStartErrorBox: @unchecked Sendable {
             var error: Error?
         }
         let errorBox = ListenerStartErrorBox()
