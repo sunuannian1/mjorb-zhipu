@@ -32,10 +32,12 @@ targets:
     platform: iOS
     deploymentTarget: "16.0"
     sources:
+      - path: Seal
         excludes:
           - "Resources/Anisette/*.so"
     resources:
       - path: Seal/Resources/Anisette
+      - path: Seal/Resources/Assets.xcassets
     dependencies:
       - package: ZIPFoundation
       - package: AltSign
@@ -101,11 +103,6 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: Seal/Resources/Seal.entitlements
-        OTHER_LDFLAGS:
-          - "$(inherited)"
-          - "-Wl,-no_fixup_chains"
-          - "-Xlinker"
-          - "-no_warn_duplicate_libraries"
   SealTunnel:
     type: app-extension
     platform: iOS
