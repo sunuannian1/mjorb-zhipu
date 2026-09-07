@@ -3,6 +3,10 @@ name = "rust_bridge"
 version = "1.0.0"
 edition = "2021"
 
+[lib]
+crate-type = ["staticlib"]
+name = "rust_bridge"
+
 [dependencies]
 # <--- bridge.rs -->
 # Service wrappers: Device, Lockdown, AFC, InstProxy, Misagent, Mounter, Heartbeat, DebugServer
