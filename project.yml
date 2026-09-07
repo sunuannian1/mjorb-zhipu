@@ -103,11 +103,9 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Seal/Resources/Seal.entitlements
         OTHER_LDFLAGS:
           - "$(inherited)"
-          - "-Xlinker"
-          - "-undefined"
-          - "-Xlinker"
-          - "dynamic_lookup"
           - "-Wl,-no_fixup_chains"
+          - "-Xlinker"
+          - "-no_warn_duplicate_libraries"
   SealTunnel:
     type: app-extension
     platform: iOS
