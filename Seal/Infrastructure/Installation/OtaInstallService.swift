@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import ZIPFoundation
+@preconcurrency import Minimuxer
 
 /// OTA 本地安装服务（itms-services）：
 /// 内嵌 HTTPS 服务器（127.0.0.1）托管签名包与安装清单，
