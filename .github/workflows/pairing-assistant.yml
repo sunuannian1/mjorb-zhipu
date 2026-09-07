@@ -12,10 +12,6 @@ on:
     branches: [main, "feature/**"]
     paths:
       - "Tools/SealPairingAssistant/**"
-      - "Seal/Features/Settings/SettingsViewModel.swift"
-      - "Seal/Features/Settings/PairingSettingsView.swift"
-      - "Seal/Infrastructure/Pairing/PairingStore.swift"
-      - "project.yml"
       - ".github/workflows/pairing-assistant.yml"
 
 concurrency:
